@@ -1,0 +1,17 @@
+{{- if .Values.caddy.pvc.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-caddy-pvc
+  labels:
+    {{- include "domain-parking.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.caddy.pvc.storageSize }}
+  {{- if .Values.caddy.pvc.storageClassName }}
+  storageClassName: {{ .Values.caddy.pvc.storageClassName }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,46 @@
+# -- Number of replicas for the combined pod
+replicaCount: 1
+
+# strategy:
+#   type: Recreate
+
+coredns:
+  image:
+    repository: coredns
+    tag: latest
+  config:
+    domain: my.zone.
+    adminEmail: admin.my.zone.
+
+caddy:
+  image:
+    repository: harbor.my.tools/domain-parking/caddy
+    tag: latest
+  config:
+    email: admin@my.zone
+    parkedPage:
+      title: "Domain Parked"
+      heading: "Domain Parked"
+      message: "This domain, <code>{{.Host}}</code>, is parked and currently not in use."
+  pvc:
+    enabled: true
+    storageSize: 1Gi
+    # storageClassName: "gp2"
+
+ns_checker:
+  image:
+    repository: harbor.my.tools/domain-parking/ns-checker
+    tag: latest
+  env:
+  - name: OUR_NS
+    value: "ns.my.zone,ns2.my.zone"
+# -- IMPORTANT: This will be updated with the Load Balancer's IP after the first install.
+#    It is referenced by the CoreDNS template.
+loadBalancerIP: "18.158.224.65"
+
+nodeSelector:
+  karpenter.sh/nodepool: ondemand-graviton
+tolerations:
+  - key: node-role.my.tools/ondemand-graviton
+    operator: Exists
+    effect: NoSchedule

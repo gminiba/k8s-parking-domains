@@ -1,0 +1,47 @@
+# Dockerfile to build a multi-arch Caddy image with rate-limiting support.
+
+ARG CADDY_VERSION=2.10.2
+ARG XCADDY_VERSION=0.4.3
+ARG RATELIMIT_MODULE=github.com/mholt/caddy-ratelimit
+
+# --- Builder Stage ---
+# This stage compiles the custom Caddy binary.
+FROM golang:1.25.1-alpine AS builder
+
+# Set ARGs again as they are not inherited across stages
+ARG CADDY_VERSION
+ARG XCADDY_VERSION
+ARG RATELIMIT_MODULE
+
+# These ARGs are automatically provided by 'docker buildx' for multi-arch builds
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+# Install build dependencies
+RUN apk add --no-cache git
+
+# Install xcaddy, the tool for building Caddy with plugins
+RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@v${XCADDY_VERSION}
+
+# Build the custom Caddy binary for the target platform
+# Override the default build tags to resolve the 'nobadger' issue
+RUN echo "Building Caddy v${CADDY_VERSION} for platform: ${TARGETPLATFORM}"
+RUN export GOOS=${TARGETOS} && \
+    export GOARCH=${TARGETARCH} && \
+    export XCADDY_GO_BUILD_FLAGS='-tags=netgo' && \
+    /go/bin/xcaddy build v${CADDY_VERSION} \
+      --with ${RATELIMIT_MODULE} \
+      --output /usr/bin/caddy
+
+# --- Final Stage ---
+# Start from the official Caddy alpine image of the same version
+FROM caddy:${CADDY_VERSION}-alpine
+
+# Copy the custom-built Caddy binary from the builder stage, replacing the original
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+
+# Verify the build by ensuring the rate-limit module is in the list of installed modules
+RUN caddy list-modules | grep http.handlers.rate_limit
+
+# The rest of the image setup (entrypoint, user, etc.) is inherited from the base image.

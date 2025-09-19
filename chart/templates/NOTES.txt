@@ -1,0 +1,21 @@
+Your domain-parking chart has been deployed.
+
+‼️ CRITICAL NEXT STEPS:
+
+1. Get the External IP / Hostname for your services:
+   Run this command and wait for EXTERNAL-IP to be populated (this may take a few minutes):
+   kubectl get services --namespace {{ .Release.Namespace }}
+
+2. Update Your Registrar's Glue Records:
+   - Find the External IP for '{{ .Release.Name }}-coredns-nlb'.
+   - Go to your domain registrar for '{{ .Values.coredns.config.domain }}'.
+   - Update the glue records for 'ns.{{ .Values.coredns.config.domain }}' and 'ns2.{{ .Values.coredns.config.domain }}' to point to this IP address.
+
+3. Update the Helm Release with the LB IP:
+   - Find the External IP for '{{ .Release.Name }}-nlb'.
+   - Run the following Helm command to update your DNS records to point to your web server:
+     helm upgrade --install {{ .Release.Name }} . \
+       --namespace {{ .Release.Namespace }} \
+       --set coredns.config.loadBalancerIP=<YOUR_LB_IP_HERE>
+
+   Your parked domains will now resolve correctly to the Caddy service.

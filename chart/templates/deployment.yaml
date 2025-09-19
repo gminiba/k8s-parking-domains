@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-server
+  labels:
+    {{- include "domain-parking.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  {{- if .Values.strategy }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "domain-parking.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "domain-parking.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/caddy-configmap.yaml") . | sha256sum }}
+        checksum/coredns-config: {{ include (print $.Template.BasePath "/coredns-configmap.yaml") . | sha256sum }}
+    spec:
+      containers:
+      - name: caddy
+        image: "{{ .Values.caddy.image.repository }}:{{ .Values.caddy.image.tag }}"
+        ports:
+        - containerPort: 80
+          name: http
+        - containerPort: 443
+          name: https
+        volumeMounts:
+        - name: caddy-config-volume
+          mountPath: /etc/caddy/Caddyfile
+          subPath: Caddyfile
+        - name: caddy-site-data
+          mountPath: /usr/share/caddy
+        - name: caddy-certs
+          mountPath: /data
+      - name: coredns
+        image: "{{ .Values.coredns.image.repository }}:{{ .Values.coredns.image.tag }}"
+        сommand: [ "/usr/bin/coredns" ]
+        args: [ "-conf", "/etc/coredns/Corefile" ]
+        ports:
+        - containerPort: 53
+          name: dns-tcp
+          protocol: TCP
+        - containerPort: 53
+          name: dns-udp
+          protocol: UDP
+        volumeMounts:
+        - name: coredns-config-volume
+          mountPath: /etc/coredns
+        - name: zones-volume
+          mountPath: /etc/coredns/zones
+      - name: checker
+        image: {{ .Values.ns_checker.image.repository }}:{{ .Values.ns_checker.image.tag }}
+        ports:
+        - containerPort: 9000
+          name: http-checker
+          protocol: TCP
+        {{- with .Values.ns_checker.env }}
+        env:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+      - name: zones-volume
+        emptyDir: {}
+      - name: coredns-config-volume
+        configMap:
+          name: {{ .Release.Name }}-coredns-config
+      - name: caddy-config-volume
+        configMap:
+          name: {{ .Release.Name }}-caddy-config
+      - name: caddy-site-data
+        configMap:
+          name: {{ .Release.Name }}-caddy-config
+      - name: caddy-certs
+      {{- if .Values.caddy.pvc.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-caddy-pvc
+      {{- else }}
+        emptyDir: {}
+      {{- end }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.tolerations }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      {{- end }}
